@@ -1,5 +1,5 @@
-const report = window.__DAILY_STOCK_REPORT__ || {};
-const stocks = report.stocks || [];
+let report = window.__DAILY_STOCK_REPORT__ || {};
+let stocks = report.stocks || [];
 
 const fmtPct = (v) => `${Number(v || 0).toFixed(2)}%`;
 const cls = (v) => Number(v || 0) >= 0 ? "up" : "down";
@@ -164,9 +164,26 @@ function drawHeroChart() {
   ctx.fillText("趋势候选近期开盘后的价格路径", 42, h - 18);
 }
 
-renderHeader();
-renderMetrics();
-renderNotes();
-renderStocks();
-renderWatchlist();
-drawHeroChart();
+async function loadFreshReport() {
+  try {
+    const response = await fetch(`./report-data.json?v=${Date.now()}`, { cache: "no-store" });
+    if (response.ok) {
+      report = await response.json();
+      stocks = report.stocks || [];
+    }
+  } catch (error) {
+    console.warn("Using embedded report data", error);
+  }
+}
+
+async function boot() {
+  await loadFreshReport();
+  renderHeader();
+  renderMetrics();
+  renderNotes();
+  renderStocks();
+  renderWatchlist();
+  drawHeroChart();
+}
+
+boot();
