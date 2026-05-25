@@ -4,6 +4,13 @@ let stocks = report.stocks || [];
 const fmtPct = (v) => `${Number(v || 0).toFixed(2)}%`;
 const cls = (v) => Number(v || 0) >= 0 ? "up" : "down";
 const el = (id) => document.getElementById(id);
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+}[char]));
 
 function renderHeader() {
   el("generatedAt").textContent = `生成时间 ${report.generatedLabel || "--"}`;
@@ -28,17 +35,27 @@ function renderMetrics() {
   ];
   el("metrics").innerHTML = items.map(([label, value, color]) => `
     <article class="metric">
-            <span class="muted">${label}</span>
-      <strong class="${color || ""}">${value}</strong>
+      <span class="muted">${escapeHtml(label)}</span>
+      <strong class="${color || ""}">${escapeHtml(value)}</strong>
     </article>
+  `).join("");
+}
+
+function renderFocusStrip() {
+  const topStocks = stocks.slice(0, 4);
+  el("focusStrip").innerHTML = topStocks.map((s) => `
+    <span>
+      <b>${escapeHtml(s.name)}</b>
+      <em class="${cls(s.pctChg)}">${fmtPct(s.pctChg)}</em>
+    </span>
   `).join("");
 }
 
 function renderNotes() {
   const opportunities = report.insight?.opportunities?.length ? report.insight.opportunities : ["等待 OpenAI 或历史报告生成更完整的机会列表。"];
   const risks = report.insight?.risks?.length ? report.insight.risks : ["请先配置模型 Key，并保持单只股票风险敞口可控。"];
-  el("opportunities").innerHTML = opportunities.map((item) => `<li>${item}</li>`).join("");
-  el("risks").innerHTML = risks.map((item) => `<li>${item}</li>`).join("");
+  el("opportunities").innerHTML = opportunities.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  el("risks").innerHTML = risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 }
 
 function sparklineSvg(values, bars) {
@@ -68,6 +85,30 @@ function sparklineSvg(values, bars) {
   `;
 }
 
+function renderRadarTable() {
+  const rows = stocks.slice(0, 10).map((s, index) => `
+    <div class="radar-row">
+      <span class="rank">${String(index + 1).padStart(2, "0")}</span>
+      <strong>${escapeHtml(s.name)}</strong>
+      <span class="code">${escapeHtml(s.code)}</span>
+      <span class="${cls(s.pctChg)}">${fmtPct(s.pctChg)}</span>
+      <span>${escapeHtml(s.amountText || "--")}</span>
+      <span>${escapeHtml(s.trendPrediction || s.advice || "趋势跟踪")}</span>
+    </div>
+  `).join("");
+  el("radarTable").innerHTML = `
+    <div class="radar-row radar-head">
+      <span>序号</span>
+      <span>股票</span>
+      <span>代码</span>
+      <span>涨跌幅</span>
+      <span>成交额</span>
+      <span>状态</span>
+    </div>
+    ${rows}
+  `;
+}
+
 function renderStocks() {
   el("stockGrid").innerHTML = stocks.map((s) => {
     const trend = Number(s.pctChg || 0) >= 0 ? "up" : "down";
@@ -75,8 +116,8 @@ function renderStocks() {
     return `
       <article class="stock-card">
         <div class="stock-title">
-          <div><h4>${s.name}</h4><span class="code">${s.code} · ${s.date || "--"}</span></div>
-          <span class="tag ${trend}">${s.advice || "观察"}</span>
+          <div><h4>${escapeHtml(s.name)}</h4><span class="code">${escapeHtml(s.code)} · ${escapeHtml(s.date || "--")}</span></div>
+          <span class="tag ${trend}">${escapeHtml(s.advice || "观察")}</span>
         </div>
         <div class="price-row">
           <span class="price">${s.close ?? "--"}</span>
@@ -84,12 +125,12 @@ function renderStocks() {
         </div>
         <div class="mini-chart">${sparklineSvg(s.sparkline || [], s.bars || [])}</div>
         <div class="fact-grid">
-          <div class="fact"><span>成交额</span><b>${s.amountText || "--"}</b></div>
-          <div class="fact"><span>量比/换手</span><b>${s.volumeRatio ?? s.turnover ?? "--"}</b></div>
-          <div class="fact"><span>趋势</span><b>${s.trendPrediction || "--"}</b></div>
+          <div class="fact"><span>成交额</span><b>${escapeHtml(s.amountText || "--")}</b></div>
+          <div class="fact"><span>量比/换手</span><b>${escapeHtml(s.volumeRatio ?? s.turnover ?? "--")}</b></div>
+          <div class="fact"><span>趋势</span><b>${escapeHtml(s.trendPrediction || "--")}</b></div>
           <div class="fact"><span>${s.volatility20 == null ? "来源" : "20日波动"}</span><b>${s.volatility20 == null ? "Codex" : fmtPct(s.volatility20)}</b></div>
         </div>
-        <p class="summary">${summary}</p>
+        <p class="summary">${escapeHtml(summary)}</p>
       </article>
     `;
   }).join("");
@@ -97,8 +138,8 @@ function renderStocks() {
 
 function renderWatchlist() {
   const items = report.insight?.watchlist?.length ? report.insight.watchlist : stocks.map((s) => `${s.name}：观察 ${s.ma20 ? "20日均线" : "关键均线"} 与成交额变化。`);
-  el("watchlist").innerHTML = items.slice(0, 5).map((item, index) => `
-    <div class="timeline-item"><b>0${index + 1}</b>${item}</div>
+  el("watchlist").innerHTML = items.slice(0, 6).map((item, index) => `
+    <div class="timeline-item"><b>${String(index + 1).padStart(2, "0")}</b>${escapeHtml(item)}</div>
   `).join("");
 }
 
@@ -180,7 +221,9 @@ async function boot() {
   await loadFreshReport();
   renderHeader();
   renderMetrics();
+  renderFocusStrip();
   renderNotes();
+  renderRadarTable();
   renderStocks();
   renderWatchlist();
   drawHeroChart();
